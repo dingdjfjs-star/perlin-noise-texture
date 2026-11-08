@@ -3,6 +3,8 @@
 单文件网页 Demo：**`index.html`**（原生 JS + Canvas，零依赖、零 CDN、无构建，双击即用）。
 手写经典 Perlin 噪声（种子洗牌置换表 + quintic fade + 双线性插值）+ fBm 分形叠加，深色工作台风格，参数即时预览。
 
+**在线版：https://dingdjfjs-star.github.io/perlin-noise-texture/ · 仓库：https://github.com/dingdjfjs-star/perlin-noise-texture**（github-pages-deploy 技能 API 通道部署，同仓名重跑即更新）
+
 ## 快速开始
 
 双击 `index.html`（file:// 直接可用，无需端口无需服务器）。左侧大画布实时预览 + 参数摘要 + 三大用途速查卡，右侧参数面板，改动即时生效（滑块 150ms 防抖）。

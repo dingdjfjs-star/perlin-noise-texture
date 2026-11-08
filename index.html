@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perlin 噪声纹理工坊 · 零依赖单文件</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1d2026;
+    --panel2: #23272f;
+    --line: #2e333c;
+    --text: #d7dce4;
+    --muted: #8b93a1;
+    --accent: #e8b04b;
+    --accent-ink: #1a1408;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.6 "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: 1px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+
+  /* 主布局：minmax(0,1fr) 防溢出（工作区经验） */
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 350px;
+    gap: 20px;
+    padding: 20px 28px;
+    align-items: start;
+  }
+  .stage { min-width: 0; }
+  .canvas-box {
+    background: #0d0f12;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    justify-content: center;
+  }
+  canvas { max-width: 100%; height: auto; display: block; border-radius: 6px; }
+  .summary {
+    margin-top: 10px;
+    color: var(--muted);
+    font: 12px/1.7 Consolas, "Courier New", monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hint { margin-top: 4px; color: var(--muted); font-size: 12px; }
+  .hint b { color: var(--accent); font-weight: 600; }
+
+  aside.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .row { display: flex; flex-direction: column; gap: 6px; }
+  .row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .row-head b { color: var(--text); font: 13px Consolas, monospace; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  input[type="number"], select {
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font: 13px Consolas, monospace;
+    outline: none;
+  }
+  input[type="number"]:focus, select:focus { border-color: var(--accent); }
+
+  .pal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .pal {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .pal .swatch {
+    width: 28px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    flex: none;
+  }
+  .pal.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .pal.wide { grid-column: 1 / -1; }
+
+  .seed-row { display: flex; gap: 8px; }
+  .seed-row input[type="number"] { flex: 1; min-width: 0; }
+
+  .checkbox-row { flex-direction: row; align-items: center; gap: 8px; }
+  .checkbox-row input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .checkbox-row label { font-size: 13px; cursor: pointer; }
+
+  .btns { display: flex; flex-direction: column; gap: 8px; }
+  button.act {
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    text-align: center;
+  }
+  button.act:hover { border-color: var(--accent); }
+  button.act.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  button.act.primary:hover { filter: brightness(1.06); }
+
+  footer {
+    padding: 12px 28px 24px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--line);
+    line-height: 1.8;
+  }
+  .uses {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .use {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .use b { color: var(--accent); font-size: 12px; font-weight: 600; }
+  .use span { color: var(--muted); font-size: 12px; line-height: 1.7; }
+  @media (max-width: 960px) {
+    main { grid-template-columns: 1fr; }
+    .summary { white-space: normal; }
+    .uses { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Perlin 噪声纹理工坊</h1>
+  <span class="sub">原生 JS Canvas · 零依赖零 CDN · 无缝平铺 · 遥感模拟纹理 / 背景图 / 灰度地形</span>
+</header>
+
+<main>
+  <section class="stage">
+    <div class="canvas-box">
+      <canvas id="view" width="512" height="512">您的浏览器不支持 Canvas</canvas>
+    </div>
+    <div class="summary" id="summary"></div>
+    <div class="hint">滑块改动 <b>150ms 防抖即时生效</b>；调种子与参数即"抽卡"，抽到满意的直接导出。</div>
+    <div class="uses">
+      <div class="use"><b>用途一 · 遥感模拟纹理</b><span>云层/荒漠配色 + 频率 2~6 + 层数 4~6，似大尺度地物斑块，可当合成影像底图或分类蒙版。</span></div>
+      <div class="use"><b>用途二 · 可平铺背景图</b><span>勾选"无缝拼接"后导出 PNG，四方连续无接缝，网页 / 桌面 / 游戏背景直接平铺。</span></div>
+      <div class="use"><b>用途三 · 简易地形高度图</b><span>切"灰度地形"或点"导出灰度 PNG"，黑=低 白=高，可喂 Cesium / Three.js 当位移贴图。</span></div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="row">
+      <div class="row-head"><span>配色方案</span></div>
+      <div class="pal-grid" id="palettes"></div>
+    </div>
+
+    <div class="row">
+      <div class="row-head"><span>基础频率（1~16）</span><b id="freqVal">4</b></div>
+      <input type="range" id="freq" min="1" max="16" step="1" value="4">
+    </div>
+
+    <div class="row">
+      <div class="row-head"><span>迭代层数 octaves（1~8）</span><b id="octVal">5</b></div>
+      <input type="range" id="octaves" min="1" max="8" step="1" value="5">
+    </div>
+
+    <div class="row">
+      <div class="row-head"><span>对比度（0.5~3.0）</span><b id="conVal">1.00</b></div>
+      <input type="range" id="contrast" min="0.5" max="3" step="0.05" value="1">
+    </div>
+
+    <div class="row">
+      <div class="row-head"><span>随机种子（同种子同参数逐像素可复现）</span></div>
+      <div class="seed-row">
+        <input type="number" id="seed" min="0" max="4294967295" step="1" value="20260829">
+        <button class="act" id="randomSeed">随机</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="row-head"><span>画布尺寸</span></div>
+      <select id="size">
+        <option value="512" selected>512 × 512</option>
+        <option value="1024">1024 × 1024</option>
+      </select>
+    </div>
+
+    <div class="row checkbox-row">
+      <input type="checkbox" id="seamless" checked>
+      <label for="seamless">无缝拼接模式（导出 PNG 可四方平铺）</label>
+    </div>
+
+    <div class="btns">
+      <button class="act primary" id="regen">一键重新生成（换新种子）</button>
+      <button class="act" id="exportPng">导出 PNG（当前配色）</button>
+      <button class="act" id="exportGray">导出灰度 PNG（地形高度图）</button>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  玩法：右侧调频率 / 层数 / 对比度与配色即时预览，点"一键重新生成"换种子抽卡；无缝模式下导出的 PNG 四方连续可直接平铺；
+  "导出灰度 PNG"所得黑-白图（R=G=B）可直接当简易地形高度图（DEM）使用。同一种子 + 同一组参数 = 逐像素一致的同一张纹理。
+  自动化自测：node test\test.js（确定性 / 周期无缝 / 边界健壮 / 灰度 / 性能全绿后交付，报告见 report/自测报告.md）。
+</footer>
+
+<script>
+'use strict';
+/* =====================================================================
+ * Perlin 噪声纹理工坊 —— 单文件零依赖
+ * 结构：A. 纯逻辑核心（无 DOM，可在 Node 中 headless 复算自测）
+ *       B. 浏览器 UI（渲染 / 参数面板 / 导出，仅在 document 存在时执行）
+ * ===================================================================== */
+
+/* ------------------------------------------------------------------
+ * A. 纯逻辑核心
+ * ------------------------------------------------------------------ */
+
+/* A1. 种子随机数：mulberry32（小、快、可复现） */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* A2. 置换表：值域 4096，双倍展开成 8192 供 perm[perm[x]+y] 二级索引不越界。
+ *      值域 4096 是为了支持无缝周期最大 2048（频率16 × 2^7 层）。 */
+const PERM_VALUE_SPACE = 4096;
+function makePerm(seed) {
+  const rng = mulberry32(seed);
+  const half = new Uint16Array(PERM_VALUE_SPACE);
+  for (let i = 0; i < PERM_VALUE_SPACE; i++) half[i] = i;
+  for (let i = PERM_VALUE_SPACE - 1; i > 0; i--) {          // Fisher–Yates 洗牌
+    const j = (rng() * (i + 1)) | 0;
+    const t = half[i]; half[i] = half[j]; half[j] = t;
+  }
+  const perm = new Uint16Array(PERM_VALUE_SPACE * 2);
+  for (let i = 0; i < PERM_VALUE_SPACE; i++) {
+    perm[i] = half[i];
+    perm[i + PERM_VALUE_SPACE] = half[i];                   // 双倍表（经典 Ken Perlin 手法）
+  }
+  return perm;
+}
+
+/* A3. 八方向单位梯度（对角归一化，分布均匀） */
+const GRAD_COUNT = 8;
+const GRAD_X = [1, -1, 0, 0, Math.SQRT1_2, -Math.SQRT1_2, Math.SQRT1_2, -Math.SQRT1_2];
+const GRAD_Y = [0, 0, 1, -1, Math.SQRT1_2, Math.SQRT1_2, -Math.SQRT1_2, -Math.SQRT1_2];
+
+/* A4. 二维 Perlin：置换表随机梯度 + quintic fade + 双线性插值。
+ *      period >= 1 时按周期取模采样（无缝平铺的关键）；period = 0 时自由延展。 */
+function makePerlin(seed) {
+  const perm = makePerm(seed);
+  function noise2(x, y, period) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const fx = x - xi, fy = y - yi;
+    let X0, X1, Y0, Y1;
+    if (period >= 1) {
+      /* 周期化：格点索引绕回，使 noise(u) ≡ noise(u + period) */
+      X0 = ((xi % period) + period) % period;
+      Y0 = ((yi % period) + period) % period;
+      X1 = (X0 + 1) % period;
+      Y1 = (Y0 + 1) % period;
+    } else {
+      /* 自由模式：采样域 ≤ 2048，掩码 4095 足够且不回绕 */
+      X0 = xi & 4095;  Y0 = yi & 4095;
+      X1 = (xi + 1) & 4095;  Y1 = (yi + 1) & 4095;
+    }
+    const g00 = perm[perm[X0] + Y0] & 7;
+    const g10 = perm[perm[X1] + Y0] & 7;
+    const g01 = perm[perm[X0] + Y1] & 7;
+    const g11 = perm[perm[X1] + Y1] & 7;
+    const n00 = GRAD_X[g00] * fx       + GRAD_Y[g00] * fy;
+    const n10 = GRAD_X[g10] * (fx - 1) + GRAD_Y[g10] * fy;
+    const n01 = GRAD_X[g01] * fx       + GRAD_Y[g01] * (fy - 1);
+    const n11 = GRAD_X[g11] * (fx - 1) + GRAD_Y[g11] * (fy - 1);
+    const u = fx * fx * fx * (fx * (fx * 6 - 15) + 10);      // quintic fade
+    const v = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+    const nx0 = n00 + u * (n10 - n00);
+    const nx1 = n01 + u * (n11 - n01);
+    return nx0 + v * (nx1 - nx0);
+  }
+  return noise2;
+}
+
+/* A5. fBm 分形叠加：增益 0.5、lacunarity 2，按总幅值归一。
+ *      无缝时基础周期 = 频率（必须整数），各层周期 ×2 同步翻倍。 */
+function fbmField(opts) {
+  const seed = (opts.seed || 0) >>> 0;
+  const freq = Math.max(1, Math.round(opts.freq) || 1);
+  const octaves = Math.min(8, Math.max(1, Math.round(opts.octaves) || 1));
+  const width = Math.max(16, opts.width | 0);
+  const seamless = !!opts.seamless;
+  const basePeriod = seamless ? freq : 0;
+  const noise2 = makePerlin(seed);
+  const field = new Float32Array(width * width);
+  let ampSum = 0;
+  for (let o = 0, amp = 1; o < octaves; o++, amp *= 0.5) ampSum += amp;
+  for (let py = 0; py < width; py++) {
+    const vBase = py / width;
+    const rowBase = py * width;
+    for (let px = 0; px < width; px++) {
+      let sum = 0, amp = 1, f = freq, period = basePeriod;
+      const uBase = px / width;
+      for (let o = 0; o < octaves; o++) {
+        sum += amp * noise2(uBase * f, vBase * f, period);
+        amp *= 0.5;
+        f *= 2;
+        if (period) period *= 2;
+      }
+      field[rowBase + px] = sum / ampSum;
+    }
+  }
+  return field;
+}
+
+/* A6. 归一化与对比度重映射（纯函数，渲染与灰度导出共用） */
+function stretch01(field) {
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < field.length; i++) {
+    const v = field[i];
+    if (v < mn) mn = v;
+    if (v > mx) mx = v;
+  }
+  const range = (mx - mn) > 1e-12 ? (mx - mn) : 1;
+  const out = new Float32Array(field.length);
+  for (let i = 0; i < field.length; i++) out[i] = (field[i] - mn) / range;
+  return out;
+}
+function contrastValue(v, c) {
+  const t = (v - 0.5) * c + 0.5;
+  return t < 0 ? 0 : t > 1 ? 1 : t;
+}
+function mapContrast(field, contrast) {
+  const c = Math.max(0.1, contrast || 1);
+  const out = new Float32Array(field.length);
+  for (let i = 0; i < field.length; i++) out[i] = contrastValue(field[i], c);
+  return out;
+}
+
+/* A7. 五套配色：多停靠点线性插值。灰度地形为黑→白高度图。 */
+const PALETTES = {
+  cloud:  { name: '云层',
+            stops: [[0, [74, 118, 180]], [0.4, [150, 188, 226]], [0.72, [226, 234, 244]], [1, [255, 255, 255]]] },
+  desert: { name: '荒漠',
+            stops: [[0, [96, 62, 38]], [0.35, [158, 104, 56]], [0.68, [212, 166, 104]], [1, [242, 226, 194]]] },
+  ocean:  { name: '海洋',
+            stops: [[0, [6, 30, 60]], [0.38, [11, 72, 108]], [0.62, [24, 120, 160]], [0.82, [110, 200, 214]], [0.93, [210, 240, 244]], [1, [255, 255, 255]]] },
+  rock:   { name: '岩石',
+            stops: [[0, [42, 42, 47]], [0.3, [84, 84, 90]], [0.6, [134, 128, 118]], [0.85, [176, 166, 152]], [1, [214, 206, 196]]] },
+  gray:   { name: '灰度地形',
+            stops: [[0, [0, 0, 0]], [1, [255, 255, 255]]] }
+};
+const PALETTE_ORDER = ['cloud', 'desert', 'ocean', 'rock', 'gray'];
+
+function samplePalette(stops, v) {
+  if (v <= 0) return stops[0][1].slice();
+  if (v >= 1) return stops[stops.length - 1][1].slice();
+  for (let i = 1; i < stops.length; i++) {
+    const p1 = stops[i][0];
+    if (v <= p1) {
+      const p0 = stops[i - 1][0], c0 = stops[i - 1][1], c1 = stops[i][1];
+      const t = (v - p0) / (p1 - p0);
+      return [
+        Math.round(c0[0] + (c1[0] - c0[0]) * t),
+        Math.round(c0[1] + (c1[1] - c0[1]) * t),
+        Math.round(c0[2] + (c1[2] - c0[2]) * t)
+      ];
+    }
+  }
+  return stops[stops.length - 1][1].slice();
+}
+
+/* 暴露纯逻辑核心，供 Node headless 自测复算（浏览器中无害） */
+globalThis.PerlinLab = {
+  mulberry32, makePerm, makePerlin, fbmField,
+  stretch01, mapContrast, contrastValue,
+  samplePalette, PALETTES, PALETTE_ORDER
+};
+if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.PerlinLab;
+
+/* ------------------------------------------------------------------
+ * B. 浏览器 UI：渲染逻辑 / 参数控制面板 / 导出功能
+ * ------------------------------------------------------------------ */
+if (typeof document !== 'undefined') { (function () {
+  const Lab = globalThis.PerlinLab;
+  const $ = function (id) { return document.getElementById(id); };
+
+  const canvas = $('view');
+  const ctx = canvas.getContext('2d');
+  const els = {
+    freq: $('freq'), octaves: $('octaves'), contrast: $('contrast'),
+    seed: $('seed'), size: $('size'), seamless: $('seamless')
+  };
+  const labels = { freq: $('freqVal'), octaves: $('octVal'), contrast: $('conVal') };
+  const paletteBox = $('palettes');
+  const summaryEl = $('summary');
+  const state = { palette: 'cloud' };
+
+  /* B1. 配色查找表（256 级预插值，逐像素上色零重复计算） */
+  const lutCache = {};
+  function getLUT(key) {
+    if (!lutCache[key]) {
+      const stops = Lab.PALETTES[key].stops;
+      const lut = new Uint8ClampedArray(256 * 3);
+      for (let i = 0; i < 256; i++) {
+        const rgb = Lab.samplePalette(stops, i / 255);
+        lut[i * 3] = rgb[0]; lut[i * 3 + 1] = rgb[1]; lut[i * 3 + 2] = rgb[2];
+      }
+      lutCache[key] = lut;
+    }
+    return lutCache[key];
+  }
+
+  /* B2. 渲染：噪声场缓存（种子/频率/层数/尺寸/无缝 变动才重算），
+   *      对比度与配色只做轻量重映射，拖动丝滑。 */
+  let cachedField = null;
+  let cachedKey = '';
+  function noiseKey() {
+    return [els.seed.value, els.freq.value, els.octaves.value, els.size.value, els.seamless.checked].join('|');
+  }
+  function ensureField() {
+    const key = noiseKey();
+    if (!cachedField || key !== cachedKey) {
+      cachedField = Lab.stretch01(Lab.fbmField({
+        seed: Number(els.seed.value) || 0,
+        freq: Number(els.freq.value),
+        octaves: Number(els.octaves.value),
+        width: Number(els.size.value),
+        seamless: els.seamless.checked
+      }));
+      cachedKey = key;
+    }
+    return cachedField;
+  }
+  function paintField(field, w, key) {
+    const lut = getLUT(key);
+    const cv = Lab.mapContrast(field, Number(els.contrast.value));
+    const img = ctx.createImageData(w, w);
+    const d = img.data;
+    let j = 0;
+    for (let i = 0; i < cv.length; i++, j += 4) {
+      const b = ((cv[i] * 255) | 0) * 3;
+      d[j] = lut[b]; d[j + 1] = lut[b + 1]; d[j + 2] = lut[b + 2]; d[j + 3] = 255;
+    }
+    return img;
+  }
+  function render() {
+    const w = Number(els.size.value);
+    if (canvas.width !== w) { canvas.width = w; canvas.height = w; }
+    const img = paintField(ensureField(), w, state.palette);
+    ctx.putImageData(img, 0, 0);
+    updateSummary();
+  }
+  function updateSummary() {
+    const name = Lab.PALETTES[state.palette].name;
+    summaryEl.textContent =
+      '种子 ' + (Number(els.seed.value) || 0) +
+      ' · 频率 ' + els.freq.value +
+      ' · 层数 ' + els.octaves.value +
+      ' · 对比度 ' + Number(els.contrast.value).toFixed(2) +
+      ' · ' + name +
+      ' · ' + (els.seamless.checked ? '无缝平铺' : '自由延展') +
+      ' · ' + canvas.width + '×' + canvas.height;
+  }
+  function updateLabels() {
+    labels.freq.textContent = els.freq.value;
+    labels.octaves.textContent = els.octaves.value;
+    labels.contrast.textContent = Number(els.contrast.value).toFixed(2);
+  }
+
+  /* B3. 参数面板：配色按钮组（色带用真实停靠点渐变展示） */
+  Lab.PALETTE_ORDER.forEach(function (key) {
+    const pal = Lab.PALETTES[key];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pal' + (key === 'gray' ? ' wide' : '') + (key === state.palette ? ' on' : '');
+    btn.dataset.key = key;
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.background = 'linear-gradient(90deg,' + pal.stops.map(function (s) {
+      return 'rgb(' + s[1][0] + ',' + s[1][1] + ',' + s[1][2] + ') ' + Math.round(s[0] * 100) + '%';
+    }).join(',') + ')';
+    btn.appendChild(swatch);
+    btn.appendChild(document.createTextNode(pal.name));
+    btn.addEventListener('click', function () {
+      state.palette = key;
+      Array.prototype.forEach.call(paletteBox.children, function (b) {
+        b.classList.toggle('on', b.dataset.key === key);
+      });
+      render();
+    });
+    paletteBox.appendChild(btn);
+  });
+
+  /* B4. 事件接线：滑块防抖 150ms，开关/下拉即时，按钮直接触发 */
+  let debounceTimer = 0;
+  function debouncedRender() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(render, 150);
+  }
+  ['freq', 'octaves', 'contrast'].forEach(function (id) {
+    els[id].addEventListener('input', function () { updateLabels(); debouncedRender(); });
+  });
+  els.seed.addEventListener('input', debouncedRender);
+  els.size.addEventListener('change', render);
+  els.seamless.addEventListener('change', render);
+  function newSeedAndRender() {
+    els.seed.value = (Math.random() * 4294967296) >>> 0;
+    render();
+  }
+  $('randomSeed').addEventListener('click', newSeedAndRender);
+  $('regen').addEventListener('click', newSeedAndRender);
+
+  /* B5. 导出：彩色 PNG / 灰度高度图 PNG，文件名带参数摘要可复现 */
+  function filename(gray) {
+    return 'perlin_' + (gray ? 'heightmap' : state.palette) +
+      '_seed' + (Number(els.seed.value) || 0) +
+      '_f' + els.freq.value +
+      '_o' + els.octaves.value +
+      '_c' + Number(els.contrast.value).toFixed(2) +
+      '_' + els.size.value + 'px' +
+      (els.seamless.checked ? '_seamless' : '') + '.png';
+  }
+  function downloadCanvas(blobCanvas, name) {
+    blobCanvas.toBlob(function (blob) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+    }, 'image/png');
+  }
+  $('exportPng').addEventListener('click', function () {
+    downloadCanvas(canvas, filename(false));
+  });
+  $('exportGray').addEventListener('click', function () {
+    const w = Number(els.size.value);
+    const off = document.createElement('canvas');
+    off.width = w; off.height = w;
+    const octx = off.getContext('2d');
+    octx.putImageData(paintField(ensureField(), w, 'gray'), 0, 0);
+    downloadCanvas(off, filename(true));
+  });
+
+  /* B6. 启动 */
+  updateLabels();
+  render();
+})(); }
+</script>
+</body>
+</html>
